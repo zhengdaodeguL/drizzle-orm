@@ -1,4 +1,4 @@
-import type { Row, RowList, Sql, TransactionSql } from 'postgres';
+import type { ReservedSql, Row, RowList, Sql, TransactionSql } from 'postgres';
 import { type Cache, NoopCache } from '~/cache/core/index.ts';
 import type { WithCacheConfig } from '~/cache/core/types.ts';
 import { entityKind } from '~/entity.ts';
@@ -18,7 +18,7 @@ export class PostgresJsPreparedQuery<T extends PreparedQueryConfig> extends PgPr
 	static override readonly [entityKind]: string = 'PostgresJsPreparedQuery';
 
 	constructor(
-		private client: Sql,
+		private client: Pick<Sql, 'unsafe'>,
 		private queryString: string,
 		private params: unknown[],
 		private logger: Logger,
@@ -112,7 +112,7 @@ export interface PostgresJsSessionOptions {
 }
 
 export class PostgresJsSession<
-	TSQL extends Sql,
+	TSQL extends Sql | ReservedSql | TransactionSql,
 	TFullSchema extends Record<string, unknown>,
 	TSchema extends TablesRelationalConfig,
 > extends PgSession<PostgresJsQueryResultHKT, TFullSchema, TSchema> {
@@ -176,6 +176,11 @@ export class PostgresJsSession<
 		transaction: (tx: PostgresJsTransaction<TFullSchema, TSchema>) => Promise<T>,
 		config?: PgTransactionConfig,
 	): Promise<T> {
+		// Reserved connections expose queries, but do not provide begin().
+		if (!('begin' in this.client)) {
+			throw new Error('Transactions are not supported by this postgres-js client');
+		}
+
 		return this.client.begin(async (client) => {
 			const session = new PostgresJsSession<TransactionSql, TFullSchema, TSchema>(
 				client,

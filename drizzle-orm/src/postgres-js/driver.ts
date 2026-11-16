@@ -1,4 +1,4 @@
-import pgClient, { type Options, type PostgresType, type Sql } from 'postgres';
+import pgClient, { type Options, type PostgresType, type ReservedSql, type Sql } from 'postgres';
 import { entityKind } from '~/entity.ts';
 import { DefaultLogger } from '~/logger.ts';
 import { PgDatabase } from '~/pg-core/db.ts';
@@ -13,6 +13,8 @@ import { type DrizzleConfig, isConfig } from '~/utils.ts';
 import type { PostgresJsQueryResultHKT } from './session.ts';
 import { PostgresJsSession } from './session.ts';
 
+type PostgresJsClient = (Sql | ReservedSql) & Pick<Sql, 'options'>;
+
 export class PostgresJsDatabase<
 	TSchema extends Record<string, unknown> = Record<string, never>,
 > extends PgDatabase<PostgresJsQueryResultHKT, TSchema> {
@@ -20,10 +22,10 @@ export class PostgresJsDatabase<
 }
 
 function construct<TSchema extends Record<string, unknown> = Record<string, never>>(
-	client: Sql,
+	client: PostgresJsClient,
 	config: DrizzleConfig<TSchema> = {},
 ): PostgresJsDatabase<TSchema> & {
-	$client: Sql;
+	$client: PostgresJsClient;
 } {
 	const transparentParser = (val: any) => val;
 
@@ -69,7 +71,7 @@ function construct<TSchema extends Record<string, unknown> = Record<string, neve
 
 export function drizzle<
 	TSchema extends Record<string, unknown> = Record<string, never>,
-	TClient extends Sql = Sql,
+	TClient extends PostgresJsClient = Sql,
 >(
 	...params: [
 		TClient | string,
@@ -87,7 +89,7 @@ export function drizzle<
 		),
 	]
 ): PostgresJsDatabase<TSchema> & {
-	$client: TClient;
+	$client: PostgresJsClient extends TClient ? Sql : TClient;
 } {
 	if (typeof params[0] === 'string') {
 		const instance = pgClient(params[0] as string);
